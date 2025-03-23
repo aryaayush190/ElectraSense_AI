@@ -23,10 +23,7 @@ class AIXplainLLMService:
             "Authorization": f"Bearer {self.api_key}"
         }
     
-    def generate_recommendation(self, 
-                               context: Dict[str, Any], 
-                               query_type: str, 
-                               max_tokens: int = 512) -> str:
+    def generate_recommendation(self, context: Dict[str, Any], query_type: str, max_tokens: int = 512) -> str:
         """
         Generate a recommendation based on the provided context
         
@@ -43,17 +40,16 @@ class AIXplainLLMService:
             return self._fallback_response(query_type, context)
             
         # Build prompt based on query type
-        try:
-            if query_type == 'outage':
-                prompt = self._build_outage_prompt(context)
-            elif query_type == 'load_balancing':
-                prompt = self._build_load_balancing_prompt(context)
-            elif query_type == 'disaster':
-                prompt = self._build_disaster_prompt(context)
-            elif query_type == 'dashboard':
-                prompt = self._build_dashboard_prompt(context)
-            else:
-                return self._fallback_response(query_type, context)
+        if query_type == 'outage':
+            prompt = self._build_outage_prompt(context)
+        elif query_type == 'load_balancing':
+            prompt = self._build_load_balancing_prompt(context)
+        elif query_type == 'disaster':
+            prompt = self._build_disaster_prompt(context)
+        elif query_type == 'dashboard':
+            prompt = self._build_dashboard_prompt(context)
+        else:
+            return self._fallback_response(query_type, context)
         
         # Call the AIXplain API with retry logic
         max_retries = 2
