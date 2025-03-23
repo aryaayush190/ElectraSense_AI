@@ -11,10 +11,12 @@ from datetime import datetime, timedelta
 
 def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
     """
-    Create an interactive map of the power grid with substations and transmission lines
+    Create an interactive map of the power grid with substations, transmission lines,
+    high priority areas, and district risk levels
     
     Parameters:
-    - grid_data: Dictionary containing substations and transmission lines data
+    - grid_data: Dictionary containing substations, transmission lines, high priority areas,
+                and district risk metrics data
     - outage_data: Optional dataframe with current outages
     - risk_scores: Optional dictionary mapping component IDs to risk scores
     
@@ -24,18 +26,25 @@ def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
     substations = grid_data['substations']
     lines = grid_data['transmission_lines']
     
-    # Calculate center point for map
-    center_lat = substations['latitude'].mean()
-    center_lon = substations['longitude'].mean()
+    # Get high priority areas and district risk metrics if available
+    high_priority_areas = grid_data.get('high_priority_areas', pd.DataFrame())
+    district_risk_metrics = grid_data.get('district_risk_metrics', pd.DataFrame())
+    
+    # Calculate center point for map - Himachal Pradesh roughly centered at these coordinates
+    center_lat = 31.8
+    center_lon = 77.4
+    if not substations.empty:
+        center_lat = substations['latitude'].mean()
+        center_lon = substations['longitude'].mean()
     
     # Create map
     m = folium.Map(location=[center_lat, center_lon], zoom_start=8, tiles='OpenStreetMap')
     
-    # Add layer control
-    folium.LayerControl().add_to(m)
-    
-    # Create marker clusters for substations
-    marker_cluster = MarkerCluster().add_to(m)
+    # Create layer groups for better organization
+    substations_layer = folium.FeatureGroup(name="Substations")
+    lines_layer = folium.FeatureGroup(name="Transmission Lines")
+    high_priority_layer = folium.FeatureGroup(name="High Priority Areas")
+    district_risk_layer = folium.FeatureGroup(name="District Risk Levels")
     
     # Create a dictionary to map substation IDs to their coordinates
     substation_coords = {}
@@ -78,7 +87,7 @@ def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
             popup=folium.Popup(popup_text, max_width=300),
             tooltip=sub['name'],
             icon=folium.Icon(color=color, icon='flash', prefix='fa')
-        ).add_to(marker_cluster)
+        ).add_to(substations_layer)
     
     # Add transmission lines
     for _, line in lines.iterrows():
@@ -119,7 +128,107 @@ def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
                 weight=weight,
                 opacity=0.7,
                 popup=f"Line ID: {line_id}<br>Capacity: {line['capacity_mw']} MW<br>Current Load: {line['current_load_pct']}%"
-            ).add_to(m)
+            ).add_to(lines_layer)
+    
+    # Add high priority areas to map if available
+    if not high_priority_areas.empty and 'name' in high_priority_areas.columns:
+        # Use different icons based on the type of high priority area
+        icon_map = {
+            'Hospital': 'plus',
+            'Educational': 'graduation-cap',
+            'Emergency Service': 'ambulance'
+        }
+        
+        for _, area in high_priority_areas.iterrows():
+            if all(col in area for col in ['latitude', 'longitude', 'name', 'type', 'district', 'criticality']):
+                icon_type = icon_map.get(area['type'], 'star')
+                
+                # Set color based on criticality
+                color = 'blue'
+                if area['criticality'] == 'High':
+                    color = 'red'
+                elif area['criticality'] == 'Medium':
+                    color = 'orange'
+                
+                # Create popup content
+                popup_content = f"""
+                <b>{area['name']}</b><br>
+                Type: {area['type']}<br>
+                District: {area['district']}<br>
+                Criticality: {area['criticality']}
+                """
+                
+                # Add marker for high priority area
+                folium.Marker(
+                    [area['latitude'], area['longitude']],
+                    popup=folium.Popup(popup_content, max_width=300),
+                    tooltip=area['name'],
+                    icon=folium.Icon(color=color, icon=icon_type, prefix='fa')
+                ).add_to(high_priority_layer)
+    
+    # Add district risk metrics if available
+    if not district_risk_metrics.empty and 'district' in district_risk_metrics.columns:
+        # Create a style function for district based on risk level
+        district_data = {}
+        for _, district in district_risk_metrics.iterrows():
+            if all(col in district for col in ['district', 'risk_level', 'risk_score', 'major_risk_factors']):
+                # Store district data for styling
+                district_data[district['district']] = {
+                    'risk_level': district['risk_level'],
+                    'risk_score': district['risk_score'],
+                    'major_risk_factors': district['major_risk_factors']
+                }
+                
+                # Find a representative point for this district (using a substation or high priority area)
+                district_location = None
+                
+                # Try to find a substation in this district
+                district_substations = substations[substations['district'] == district['district']]
+                if not district_substations.empty:
+                    row = district_substations.iloc[0]
+                    district_location = [row['latitude'], row['longitude']]
+                # If no substation, try high priority areas
+                elif not high_priority_areas.empty and 'district' in high_priority_areas.columns:
+                    district_areas = high_priority_areas[high_priority_areas['district'] == district['district']]
+                    if not district_areas.empty:
+                        row = district_areas.iloc[0]
+                        district_location = [row['latitude'], row['longitude']]
+                
+                if district_location:
+                    # Determine color based on risk level
+                    color = 'green'
+                    if district['risk_level'] == 'Very High':
+                        color = 'darkred'
+                    elif district['risk_level'] == 'High':
+                        color = 'red'
+                    elif district['risk_level'] == 'Medium':
+                        color = 'orange'
+                    
+                    # Create circle marker for district risk
+                    folium.CircleMarker(
+                        location=district_location,
+                        radius=15,
+                        color=color,
+                        fill=True,
+                        fill_color=color,
+                        fill_opacity=0.5,
+                        popup=f"""
+                        <b>District: {district['district']}</b><br>
+                        Risk Level: {district['risk_level']}<br>
+                        Risk Score: {district['risk_score']:.2f}<br>
+                        Major Risk Factors: {district['major_risk_factors']}
+                        """,
+                        tooltip=f"{district['district']}: {district['risk_level']} Risk"
+                    ).add_to(district_risk_layer)
+    
+    # Add all layers to map
+    substations_layer.add_to(m)
+    lines_layer.add_to(m)
+    high_priority_layer.add_to(m)
+    district_risk_layer.add_to(m)
+    
+    # Add layer control
+    folium.LayerControl().add_to(m)
     
     return m
 
