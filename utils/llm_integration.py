@@ -2,21 +2,32 @@ import requests
 import json
 import os
 import time
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any
 
 class AIXplainLLMService:
     """Client for interacting with AIXplain's Mistral Large LLM"""
     
+    # Default API key - replace with your own for direct usage
+    DEFAULT_API_KEY = "" 
+    
     def __init__(self, api_key=None):
-        """Initialize the AIXplain client with API key"""
-        self.api_key = api_key or os.getenv("AIXPLAIN_API_KEY", "")
-        # Verify if we have a valid API key
+        """
+        Initialize the AIXplain client with API key
+        
+        Args:
+            api_key: Optional API key override
+        """
+        # Try API key from parameters, environment, or default
+        self.api_key = api_key or os.getenv("AIXPLAIN_API_KEY", self.DEFAULT_API_KEY)
+        
+        # Validate API key and set service status
         if not self.api_key or len(self.api_key.strip()) < 5:
             print("Warning: Invalid or missing AIXplain API key. Using fallback responses.")
             self.use_aixplain = False
         else:
             self.use_aixplain = True
             
+        # Set API endpoint and headers
         self.base_url = "https://api.aixplain.com/production/generate/41ebd663-9048-46f9-a2df-49e08b0572e5"
         self.headers = {
             "Content-Type": "application/json",
@@ -27,13 +38,13 @@ class AIXplainLLMService:
         """
         Generate a recommendation based on the provided context
         
-        Parameters:
-        - context: Dictionary containing the context data
-        - query_type: Type of recommendation to generate (e.g., 'outage', 'load_balancing', 'disaster')
-        - max_tokens: Maximum number of tokens to generate
+        Args:
+            context: Dictionary containing the context data
+            query_type: Type of recommendation to generate (e.g., 'outage', 'load_balancing', 'disaster')
+            max_tokens: Maximum number of tokens to generate
         
         Returns:
-        - Generated recommendation text
+            Generated recommendation text
         """
         # If AIXplain is not configured, use fallback responses
         if not self.use_aixplain:
@@ -72,7 +83,19 @@ class AIXplainLLMService:
                     return self._fallback_response(query_type, context)
     
     def _call_api(self, prompt: str, max_tokens: int) -> str:
-        """Call the AIXplain API with the given prompt"""
+        """
+        Call the AIXplain API with the given prompt
+        
+        Args:
+            prompt: The text prompt for the LLM
+            max_tokens: Maximum tokens to generate
+            
+        Returns:
+            Generated text response
+            
+        Raises:
+            Exception: If API call fails
+        """
         payload = {
             "text": prompt,
             "param": {
@@ -101,7 +124,15 @@ class AIXplainLLMService:
             raise
     
     def _build_outage_prompt(self, context: Dict[str, Any]) -> str:
-        """Build a prompt for outage prediction recommendation"""
+        """
+        Build a prompt for outage prediction recommendation
+        
+        Args:
+            context: Context data for outage prediction
+            
+        Returns:
+            Formatted prompt string
+        """
         prompt = (
             "You are an expert power grid consultant specializing in outage management. "
             "Based on the following information about a potential power outage, "
@@ -139,7 +170,15 @@ class AIXplainLLMService:
         return prompt
     
     def _build_load_balancing_prompt(self, context: Dict[str, Any]) -> str:
-        """Build a prompt for load balancing recommendation"""
+        """
+        Build a prompt for load balancing recommendation
+        
+        Args:
+            context: Context data for load balancing
+            
+        Returns:
+            Formatted prompt string
+        """
         prompt = (
             "You are an expert power grid engineer specializing in load management and power flow optimization. "
             "Based on the following information about the current grid status, "
@@ -166,7 +205,15 @@ class AIXplainLLMService:
         return prompt
     
     def _build_disaster_prompt(self, context: Dict[str, Any]) -> str:
-        """Build a prompt for disaster response recommendation"""
+        """
+        Build a prompt for disaster response recommendation
+        
+        Args:
+            context: Context data for disaster response
+            
+        Returns:
+            Formatted prompt string
+        """
         prompt = (
             "You are an expert in power grid disaster response planning. "
             "Based on the following information about a potential disaster scenario, "
@@ -209,7 +256,15 @@ class AIXplainLLMService:
         return prompt
     
     def _build_dashboard_prompt(self, context: Dict[str, Any]) -> str:
-        """Build a prompt for dashboard summary and recommendations"""
+        """
+        Build a prompt for dashboard summary and recommendations
+        
+        Args:
+            context: Context data for dashboard summary
+            
+        Returns:
+            Formatted prompt string
+        """
         prompt = (
             "You are an executive advisor for electricity grid operations. "
             "Based on the following current grid status information, "
@@ -242,7 +297,16 @@ class AIXplainLLMService:
         return prompt
     
     def _fallback_response(self, query_type: str, context: Dict[str, Any]) -> str:
-        """Provide a fallback response when the API call fails"""
+        """
+        Provide a fallback response when the API call fails
+        
+        Args:
+            query_type: Type of recommendation to generate
+            context: Context data for recommendation
+            
+        Returns:
+            Fallback recommendation text
+        """
         if query_type == 'outage':
             # Extract relevant context details
             district = context.get('district', 'the affected region')

@@ -25,7 +25,7 @@ st.sidebar.image("https://upload.wikimedia.org/wikipedia/commons/thumb/4/41/Elec
 # Navigation options
 page = st.sidebar.radio(
     "Navigate to",
-    ["Dashboard", "Outage Prediction", "Load Balancing", "Disaster Response"]
+    ["Dashboard", "Outage Prediction", "Load Balancing", "Disaster Response", "About"]
 )
 
 # Display information in sidebar
@@ -51,3 +51,6 @@ elif page == "Load Balancing":
 elif page == "Disaster Response":
     import pages.disaster_response as disaster_response_module
     disaster_response_module.show()
+elif page == "About":
+    import pages.about as about_module
+    about_module.show()
