@@ -298,6 +298,21 @@ def initialize_data():
     infrastructure_data['maintenance_frequency_days'] = np.random.randint(30, 365, size=len(infrastructure_data))
     infrastructure_data['condition_score'] = np.random.uniform(60, 98, size=len(infrastructure_data))
     
+    # Load high priority areas and district risk levels
+    try:
+        from data.high_priority_areas import generate_high_priority_areas
+        print("Generating high priority areas...")
+        high_priority_areas, district_risk_metrics = generate_high_priority_areas()
+        
+        # Add to grid data
+        grid_data['high_priority_areas'] = high_priority_areas
+        grid_data['district_risk_metrics'] = district_risk_metrics
+    except Exception as e:
+        print(f"Warning: Could not load high priority areas: {e}")
+        # Create empty dataframes if modules aren't available
+        grid_data['high_priority_areas'] = pd.DataFrame()
+        grid_data['district_risk_metrics'] = pd.DataFrame()
+    
     return grid_data, weather_data, outage_history, infrastructure_data
 
 if __name__ == "__main__":
@@ -308,3 +323,5 @@ if __name__ == "__main__":
     print(f"Generated {len(grid_data['transmission_lines'])} transmission lines")
     print(f"Generated {len(weather_data)} weather data points")
     print(f"Generated {len(outage_history)} historical outage records")
+    print(f"Generated {len(grid_data.get('high_priority_areas', pd.DataFrame()))} high priority areas")
+    print(f"Generated {len(grid_data.get('district_risk_metrics', pd.DataFrame()))} district risk metrics")

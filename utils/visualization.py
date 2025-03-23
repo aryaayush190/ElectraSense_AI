@@ -63,7 +63,7 @@ def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
                 popup_text += f"<br><b>Risk Score: {risk:.2f} (Low)</b>"
         
         # Check if there's an outage for this substation
-        if outage_data is not None:
+        if outage_data is not None and not outage_data.empty and 'component_type' in outage_data.columns and 'component_id' in outage_data.columns:
             outage = outage_data[
                 (outage_data['component_type'] == 'substation') & 
                 (outage_data['component_id'] == sub_id)
@@ -103,7 +103,7 @@ def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
                     color = 'green'
             
             # Check if there's an outage for this line
-            if outage_data is not None:
+            if outage_data is not None and not outage_data.empty and 'component_type' in outage_data.columns and 'component_id' in outage_data.columns:
                 outage = outage_data[
                     (outage_data['component_type'] == 'line') & 
                     (outage_data['component_id'] == line_id)
