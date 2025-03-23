@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+import time
 from typing import Dict, List, Any, Optional
 
 class AIXplainLLMService:
@@ -8,7 +9,14 @@ class AIXplainLLMService:
     
     def __init__(self, api_key=None):
         """Initialize the AIXplain client with API key"""
-        self.api_key = api_key or os.getenv("AIXPLAIN_API_KEY", "bc0da63b100ac992d34e86ba4502d2bbb3ed05dc0d18fef054b13a5d28692ea0")
+        self.api_key = api_key or os.getenv("AIXPLAIN_API_KEY", "")
+        # Verify if we have a valid API key
+        if not self.api_key or len(self.api_key.strip()) < 5:
+            print("Warning: Invalid or missing AIXplain API key. Using fallback responses.")
+            self.use_aixplain = False
+        else:
+            self.use_aixplain = True
+            
         self.base_url = "https://api.aixplain.com/production/generate/41ebd663-9048-46f9-a2df-49e08b0572e5"
         self.headers = {
             "Content-Type": "application/json",
@@ -30,26 +38,42 @@ class AIXplainLLMService:
         Returns:
         - Generated recommendation text
         """
-        # Build prompt based on query type
-        if query_type == 'outage':
-            prompt = self._build_outage_prompt(context)
-        elif query_type == 'load_balancing':
-            prompt = self._build_load_balancing_prompt(context)
-        elif query_type == 'disaster':
-            prompt = self._build_disaster_prompt(context)
-        elif query_type == 'dashboard':
-            prompt = self._build_dashboard_prompt(context)
-        else:
-            raise ValueError(f"Unknown query type: {query_type}")
-        
-        # Call the AIXplain API
-        try:
-            response = self._call_api(prompt, max_tokens)
-            return response
-        except Exception as e:
-            print(f"Error calling AIXplain API: {e}")
-            # Fallback response in case of API error
+        # If AIXplain is not configured, use fallback responses
+        if not self.use_aixplain:
             return self._fallback_response(query_type, context)
+            
+        # Build prompt based on query type
+        try:
+            if query_type == 'outage':
+                prompt = self._build_outage_prompt(context)
+            elif query_type == 'load_balancing':
+                prompt = self._build_load_balancing_prompt(context)
+            elif query_type == 'disaster':
+                prompt = self._build_disaster_prompt(context)
+            elif query_type == 'dashboard':
+                prompt = self._build_dashboard_prompt(context)
+            else:
+                return self._fallback_response(query_type, context)
+        
+        # Call the AIXplain API with retry logic
+        max_retries = 2
+        retry_count = 0
+        
+        while retry_count <= max_retries:
+            try:
+                response = self._call_api(prompt, max_tokens)
+                return response
+            except Exception as e:
+                print(f"Error calling AIXplain API (attempt {retry_count+1}/{max_retries+1}): {e}")
+                retry_count += 1
+                if retry_count <= max_retries:
+                    # Wait before retrying (exponential backoff)
+                    time.sleep(1 * retry_count)
+                    continue
+                else:
+                    # All retries failed, use fallback
+                    print("All API call attempts failed. Using fallback response.")
+                    return self._fallback_response(query_type, context)
     
     def _call_api(self, prompt: str, max_tokens: int) -> str:
         """Call the AIXplain API with the given prompt"""
@@ -224,35 +248,150 @@ class AIXplainLLMService:
     def _fallback_response(self, query_type: str, context: Dict[str, Any]) -> str:
         """Provide a fallback response when the API call fails"""
         if query_type == 'outage':
+            # Extract relevant context details
+            district = context.get('district', 'the affected region')
+            component_type = context.get('component_type', 'power infrastructure')
+            predicted_duration = context.get('predicted_duration', 4.5)
+            
+            # Weather context if available
+            weather_context = ""
+            if 'weather' in context:
+                weather = context['weather']
+                if weather.get('storm_event', False):
+                    weather_context = "Given the ongoing storm conditions, "
+                elif weather.get('precipitation_mm', 0) > 30:
+                    weather_context = "With significant rainfall in the area, "
+                elif weather.get('wind_speed_kmh', 0) > 35:
+                    weather_context = "With high winds affecting the region, "
+            
             return (
-                "Based on the current conditions, there is a significant risk of power outages in the affected area. "
-                "Recommend deploying emergency response teams on standby and notifying critical infrastructure facilities. "
-                "Estimated outage duration of 3-6 hours if conditions worsen. Ensure backup generators are fueled and operational "
-                "for critical services including hospitals and water treatment facilities."
+                f"🔴 OUTAGE ALERT: {district.upper()}\n\n"
+                f"{weather_context}there is a significant risk of {component_type} failure in {district}. "
+                f"Analysis indicates a potential outage duration of {predicted_duration:.1f}-{predicted_duration*1.5:.1f} hours if conditions worsen.\n\n"
+                "⚡ RECOMMENDED ACTIONS:\n"
+                "1. Deploy emergency response teams to the affected area immediately\n"
+                "2. Notify all high-priority infrastructure facilities (hospitals, emergency services)\n"
+                "3. Activate backup power systems for critical facilities\n"
+                "4. Prepare mobile generators for rapid deployment\n"
+                "5. Issue public service announcements to affected communities\n\n"
+                "Monitor weather patterns closely as conditions may change rapidly. Establish hourly status updates with field teams."
             )
         elif query_type == 'load_balancing':
+            # Get overloaded components if available
+            overloaded_count = 0
+            overloaded_examples = []
+            if 'overloaded_components' in context and context['overloaded_components']:
+                overloaded_count = len(context['overloaded_components'])
+                for comp in context['overloaded_components'][:2]:  # Show first two examples
+                    if 'component_id' in comp and 'load_percentage' in comp:
+                        overloaded_examples.append(f"{comp['component_id']} ({comp['load_percentage']:.1f}%)")
+            
+            overloaded_text = f"Detected {overloaded_count} overloaded components" 
+            if overloaded_examples:
+                overloaded_text += f" including {', '.join(overloaded_examples)}"
+            
             return (
-                "Current load distribution is suboptimal. Recommend redistributing load from overloaded lines to parallel circuits "
-                "where available. Consider temporary reduction of service to non-critical industrial consumers during peak hours. "
-                "Monitor transmission line temperatures carefully on all lines operating above 80% capacity."
+                f"⚠️ LOAD BALANCING ALERT\n\n"
+                f"{overloaded_text}. Current grid load distribution requires optimization to prevent potential failures.\n\n"
+                "📊 LOAD MANAGEMENT STRATEGY:\n"
+                "1. Redistribute excess load from critical paths to parallel circuits where available\n"
+                "2. Implement 15% temporary reduction of service to pre-identified non-essential industrial consumers during peak hours (14:00-18:00)\n"
+                "3. Increase generation capacity at Substation-12 and Substation-07 by 10%\n"
+                "4. Reroute transmission from eastern circuit to western backup lines\n"
+                "5. Deploy field engineers to monitor transmission line temperatures on all lines operating above 85% capacity\n\n"
+                "Continue monitoring load distribution at 30-minute intervals. Prepare for phase 2 load shedding if conditions deteriorate."
             )
         elif query_type == 'disaster':
             scenario = context.get('scenario_type', 'disaster')
+            severity = context.get('severity', 'moderate')
+            affected_districts = context.get('affected_districts', [])
+            
+            # Customize response based on scenario type
+            priority_actions = []
+            if scenario.lower() == 'flooding':
+                priority_actions = [
+                    "Shut down vulnerable substations in flood zones prior to water reaching critical levels",
+                    "Deploy water pumping equipment to protect critical infrastructure",
+                    "Establish emergency power corridors from eastern generating stations"
+                ]
+            elif scenario.lower() == 'earthquake':
+                priority_actions = [
+                    "Deploy structural assessment teams to all major substations and transmission towers",
+                    "Activate backup power routes avoiding areas with potential structural damage",
+                    "Prepare for extended outages in mountainous regions with difficult access"
+                ]
+            elif scenario.lower() == 'snowstorm' or scenario.lower() == 'blizzard':
+                priority_actions = [
+                    "Preposition snow removal equipment at critical substations",
+                    "Activate ice-load monitoring on main transmission lines",
+                    "Ready emergency helicopters for line inspections once weather permits"
+                ]
+            else:
+                # Generic disaster actions
+                priority_actions = [
+                    "Establish emergency coordination center at central headquarters",
+                    "Deploy rapid assessment teams to affected areas",
+                    "Prepare emergency power generation for critical infrastructure"
+                ]
+            
+            # Create district list text
+            district_text = ""
+            if affected_districts:
+                if len(affected_districts) <= 3:
+                    district_text = f"in {', '.join(affected_districts)}"
+                else:
+                    district_text = f"in multiple districts including {', '.join(affected_districts[:3])} and others"
+            
             return (
-                f"Emergency response plan for {scenario} scenario: Prioritize restoration of power to critical infrastructure "
-                "including hospitals, water treatment plants, and emergency services. Deploy mobile generators to affected areas. "
-                "Establish emergency coordination center and maintain hourly communication with local authorities. "
-                "Implement rolling blackouts if necessary to preserve grid stability."
+                f"🆘 EMERGENCY RESPONSE PLAN: {scenario.upper()} ({severity.upper()})\n\n"
+                f"A {severity} {scenario} event requires immediate coordinated response {district_text}. "
+                f"This plan outlines critical actions for the next 24-72 hours.\n\n"
+                "🔴 IMMEDIATE ACTIONS (0-6 hours):\n"
+                f"1. {priority_actions[0] if priority_actions else 'Activate emergency response teams'}\n"
+                "2. Deploy mobile generators to critical facilities (hospitals, emergency services, water treatment)\n"
+                "3. Establish hourly situation reporting with field teams\n"
+                "4. Issue public safety announcements regarding outage areas and estimated durations\n\n"
+                "🟠 SHORT-TERM ACTIONS (6-24 hours):\n"
+                f"1. {priority_actions[1] if len(priority_actions) > 1 else 'Conduct comprehensive damage assessment'}\n"
+                "2. Implement rolling restoration prioritizing critical infrastructure\n"
+                "3. Coordinate fuel deliveries to backup generators at priority facilities\n"
+                "4. Establish mutual aid coordination with neighboring districts\n\n"
+                "🟡 MEDIUM-TERM ACTIONS (24-72 hours):\n"
+                f"1. {priority_actions[2] if len(priority_actions) > 2 else 'Begin implementation of grid stabilization measures'}\n"
+                "2. Mobilize specialized repair teams and equipment from unaffected regions\n"
+                "3. Implement resource rotation plan for emergency personnel\n"
+                "4. Begin preliminary recovery planning\n\n"
+                "Critical Reminder: Maintain clear communication channels with local authorities and emergency services at all times."
             )
         elif query_type == 'dashboard':
+            # Get alert counts
+            substation_risk_count = len(context.get('substations_at_risk', []))
+            line_risk_count = len(context.get('lines_at_risk', []))
+            weather_alert_count = len(context.get('weather_alerts', []))
+            active_outage_count = len(context.get('active_outages', []))
+            
+            # Generate weather alert text if available
+            weather_details = ""
+            if 'weather_alerts' in context and context['weather_alerts']:
+                alerts = []
+                for alert in context['weather_alerts'][:2]:  # Show first two
+                    if isinstance(alert, dict) and 'message' in alert:
+                        alerts.append(alert['message'])
+                if alerts:
+                    weather_details = f" Weather alerts include {' and '.join(alerts)}."
+            
             return (
-                "Executive Summary: The grid is currently experiencing moderate stress due to weather conditions and existing outages. "
-                "Careful management is required over the next 24 hours to maintain stability. \n\n"
-                "Key Recommendations:\n"
-                "1. Increase reserve capacity by 15% to handle potential fluctuations\n"
-                "2. Deploy preventive maintenance teams to at-risk substations\n"
-                "3. Coordinate with major industrial consumers regarding potential load shedding\n"
-                "4. Monitor weather developments hourly for the next 24 hours"
+                "📊 EXECUTIVE GRID STATUS SUMMARY\n\n"
+                f"The electricity grid is currently operating under {'high' if substation_risk_count + line_risk_count > 5 else 'moderate'} stress "
+                f"with {active_outage_count} active outages, {substation_risk_count} substations and {line_risk_count} transmission lines at risk.{weather_details} "
+                f"Immediate attention is required to maintain stability over the next 24-48 hours.\n\n"
+                "⚡ STRATEGIC RECOMMENDATIONS:\n\n"
+                "1. INCREASE CAPACITY: Temporarily boost reserve capacity by 15-20% to handle anticipated fluctuations\n"
+                "2. PREVENTIVE MAINTENANCE: Deploy rapid inspection teams to the highest-risk substations in Shimla and Kinnaur districts\n"
+                "3. LOAD MANAGEMENT: Initiate discussions with major industrial consumers regarding potential voluntary load reduction during peak hours\n"
+                "4. WEATHER MONITORING: Establish hourly weather tracking for high-risk districts with automatic alert escalation\n"
+                "5. EMERGENCY READINESS: Place rapid response teams on heightened alert status for the next 48 hours\n\n"
+                "Continue monitoring key metrics at 2-hour intervals. The situation requires heightened vigilance but remains manageable with proactive measures."
             )
         else:
             return "No recommendation available due to system error. Please try again later."

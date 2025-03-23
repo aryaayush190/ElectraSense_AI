@@ -1,11 +1,9 @@
 import streamlit as st
-import pandas as pd
-import numpy as np
 from data_generator import initialize_data
 
 # Set page configuration
 st.set_page_config(
-    page_title="Electricity Resilience System",
+    page_title="ElectraSense: Electricity Resilience System",
     page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -37,7 +35,8 @@ st.sidebar.info(
     "for electricity grid resilience in Himachal Pradesh."
 )
 st.sidebar.markdown("---")
-st.sidebar.write("Powered by XGBoost and AIXplain's Mistral Large")
+st.sidebar.write("Developed by Team AstralVolt")
+st.sidebar.write("@Powered by aiXplain")
 
 # Import and display the selected page
 if page == "Dashboard":

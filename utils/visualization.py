@@ -158,11 +158,11 @@ def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
                 Criticality: {area['criticality']}
                 """
                 
-                # Add marker for high priority area
+                # Add marker for high priority area with better tooltip
                 folium.Marker(
                     [area['latitude'], area['longitude']],
                     popup=folium.Popup(popup_content, max_width=300),
-                    tooltip=area['name'],
+                    tooltip=f"{area['name']} ({area['district']})",
                     icon=folium.Icon(color=color, icon=icon_type, prefix='fa')
                 ).add_to(high_priority_layer)
     
@@ -204,21 +204,34 @@ def plot_grid_map(grid_data, outage_data=None, risk_scores=None):
                     elif district['risk_level'] == 'Medium':
                         color = 'orange'
                     
-                    # Create circle marker for district risk
+                    # Create enhanced circle marker for district risk
                     folium.CircleMarker(
                         location=district_location,
-                        radius=15,
+                        radius=20,
                         color=color,
                         fill=True,
                         fill_color=color,
                         fill_opacity=0.5,
-                        popup=f"""
-                        <b>District: {district['district']}</b><br>
-                        Risk Level: {district['risk_level']}<br>
-                        Risk Score: {district['risk_score']:.2f}<br>
-                        Major Risk Factors: {district['major_risk_factors']}
-                        """,
-                        tooltip=f"{district['district']}: {district['risk_level']} Risk"
+                        weight=3,
+                        popup=folium.Popup(f"""
+                        <div style="font-family: Arial; padding: 5px;">
+                            <h4 style="margin: 0 0 5px 0;"><b>{district['district']} District</b></h4>
+                            <div style="margin-bottom: 5px;"><b>Risk Level:</b> <span style="color: {color}; font-weight: bold;">{district['risk_level']}</span></div>
+                            <div style="margin-bottom: 5px;"><b>Risk Score:</b> {district['risk_score']:.2f}/1.00</div>
+                            <div><b>Risk Factors:</b><br>{district['major_risk_factors']}</div>
+                        </div>
+                        """, max_width=300),
+                        tooltip=f"{district['district']} - {district['risk_level']} Risk"
+                    ).add_to(district_risk_layer)
+                    
+                    # Add district label
+                    folium.map.Marker(
+                        location=district_location,
+                        icon=folium.DivIcon(
+                            icon_size=(150, 36),
+                            icon_anchor=(75, 18),
+                            html=f'<div style="font-size: 12pt; font-weight: bold; color: {color}; text-shadow: 1px 1px 1px white;">{district["district"]}</div>'
+                        )
                     ).add_to(district_risk_layer)
     
     # Add all layers to map
